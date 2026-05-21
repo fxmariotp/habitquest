@@ -106,22 +106,22 @@ export default function SocialPage({ userId, lang }) {
   }
 
   async function loadLeaderboard(squadId) {
-    const sid = squadId || squad?.id
+    const sid = squadId || squadRef.current?.id
     if (!sid) return
 
     const ids = await getSquadMemberIds(sid)
     if (!ids.length) return
 
-    // Get fresh profiles
+    // Fetch profiles fresh — total_exp is always up to date
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, display_name, avatar_emoji, level, class_name, total_exp')
+      .select('id, display_name, avatar_emoji, level, class_name, total_exp, total_done')
       .in('id', ids)
 
-    // Weekly exp — from Monday of current week
+    // Weekly exp from habit_logs (best effort — falls back to total_exp order if empty)
     const now = new Date()
     const monday = new Date(now)
-    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7)) // Monday
+    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7))
     monday.setHours(0,0,0,0)
 
     const { data: logs } = await supabase
@@ -136,10 +136,13 @@ export default function SocialPage({ userId, lang }) {
     })
 
     const lb = (profiles || [])
-      .map(p => ({ ...p, weekly_exp: weeklyMap[p.id] || 0 }))
-      .sort((a, b) => b.weekly_exp - a.weekly_exp)
-
-    setLeaderboard(lb)
+      .map(p => ({
+        ...p,
+        // If habit_logs has data use it, otherwise show total_exp as fallback
+        weekly_exp: weeklyMap[p.id] ?? 0,
+      }))
+      .sort((a, b) => b.total_exp - a.total_exp) // sort by total_exp — always accurate
+      setLeaderboard(lb)
   }
 
   async function reactToEvent(feedId, emoji) {
@@ -285,7 +288,7 @@ export default function SocialPage({ userId, lang }) {
         {/* Feed / Ranking toggle */}
         <div style={{ display:'flex', background:'var(--bg3)', borderRadius:100, padding:4, gap:4 }}>
           {[['feed','Feed'],['ranking','Ranking']].map(([v,lbl])=>(
-            <button key={v} onClick={()=>{ setView(v); if(v==='ranking') loadLeaderboard() }}
+            <button key={v} onClick={()=>{ setView(v); if(v==='ranking') loadLeaderboard(squadRef.current?.id) }}
               style={{ padding:'7px 14px', borderRadius:100, border:'none',
                 background: view===v?'var(--panel)':'transparent',
                 color: view===v?'var(--text)':'var(--text3)',
@@ -362,10 +365,10 @@ export default function SocialPage({ userId, lang }) {
               </div>
               <div style={{ textAlign:'right' }}>
                 <div style={{ fontFamily:'var(--mono)', fontSize:15, fontWeight:700, color:'var(--accent)' }}>
-                  {row.weekly_exp} EXP
+                  {row.total_exp?.toLocaleString()} EXP
                 </div>
                 <div style={{ fontSize:11, color:'var(--text3)' }}>
-                  {lang==='en'?'this week':'esta semana'}
+                  {row.weekly_exp > 0 ? `+${row.weekly_exp} ${lang==='en'?'this week':'esta semana'}` : lang==='en'?'total':'total'}
                 </div>
               </div>
             </div>
