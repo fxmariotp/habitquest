@@ -20,34 +20,32 @@ export default function SocialPage({ userId, lang }) {
     loadSquad()
   }, [])
 
-  // Realtime — recargar cuando alguien completa un hábito o sube de nivel
+  // Polling cada 30s + realtime cuando está disponible
   useEffect(() => {
     if (!squad) return
 
-    const channel = supabase.channel('social-realtime')
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'activity_feed'
-      }, () => {
-        loadFeed(squadRef.current?.id)
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'profiles'
-      }, () => {
-        loadLeaderboard(squadRef.current?.id)
-      })
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'habit_logs'
-      }, () => {
-        loadLeaderboard(squadRef.current?.id)
-      })
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'reactions'
-      }, () => {
-        loadReactions()
-      })
+    // Polling fallback — siempre funciona
+    const interval = setInterval(() => {
+      loadFeed(squadRef.current?.id)
+      loadLeaderboard(squadRef.current?.id)
+    }, 30000)
+
+    // Realtime — funciona si está activado en Supabase
+    const channel = supabase.channel('social-' + squad.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_feed' },
+        () => loadFeed(squadRef.current?.id))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' },
+        () => loadLeaderboard(squadRef.current?.id))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'habit_logs' },
+        () => loadLeaderboard(squadRef.current?.id))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions' },
+        () => loadReactions())
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
   }, [squad?.id])
 
   async function loadSquad() {
