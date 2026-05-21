@@ -194,8 +194,35 @@ export function useGame(userId) {
 
   async function completeHabit(habitId, x, y) {
     const h = habits.find(h => h.id === habitId)
-    if (!h || h.done_today) return
+    if (!h) return
 
+    // ── DESMARCAR (undo) ──────────────────────────
+    if (h.done_today) {
+      setHabits(hs => hs.map(x => x.id === habitId ? { ...x, done_today: false } : x))
+      await supabase.from('habits').update({ done_today: false }).eq('id', habitId)
+      // revert total_done and exp (best effort — restar lo ganado)
+      const prof = profileRef.current
+      const revertExp = DIFF_EXP[h.difficulty]
+      const newTotalDone = Math.max(0, (prof?.total_done || 1) - 1)
+      const newTotalExp  = Math.max(0, (prof?.total_exp  || 0) - revertExp)
+      const newExp       = Math.max(0, (prof?.exp        || 0) - revertExp)
+      await supabase.from('profiles').update({
+        total_done: newTotalDone,
+        total_exp:  newTotalExp,
+        exp:        newExp,
+      }).eq('id', userId)
+      // delete last log entry for this habit today
+      await supabase.from('habit_logs')
+        .delete()
+        .eq('user_id', userId)
+        .eq('habit_id', habitId)
+        .eq('logged_date', todayStr())
+      const { data: freshProf } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      if (freshProf) { setProfile(freshProf); profileRef.current = freshProf }
+      return
+    }
+
+    // ── MARCAR COMPLETADO ─────────────────────────
     // optimistic update
     setHabits(hs => hs.map(x => x.id === habitId ? { ...x, done_today: true } : x))
 
@@ -208,7 +235,8 @@ export function useGame(userId) {
       statBumps[k] = (prof?.[k] || 1) + 1
     })
 
-    await supabase.from('profiles').update({ mp: newMp, ...statBumps }).eq('id', userId)
+    const newTotalDone = (prof?.total_done || 0) + 1
+    await supabase.from('profiles').update({ mp: newMp, total_done: newTotalDone, ...statBumps }).eq('id', userId)
     await supabase.from('habits').update({ done_today: true }).eq('id', habitId)
 
     const expGained = await gainExp(DIFF_EXP[h.difficulty], x, y)

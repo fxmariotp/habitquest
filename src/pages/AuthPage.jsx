@@ -39,7 +39,10 @@ export default function AuthPage({ lang, setLang, theme, toggleTheme }) {
         <button className="btn-icon" onClick={toggleTheme}>{theme==='dark'?'☀️':'🌙'}</button>
       </div>
 
-      <div className="auth-logo">⚔ HABITQUEST</div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:6 }}>
+        <img src="/logo.png" alt="HabitQuest" style={{ width:48, height:48, borderRadius:12, objectFit:'cover' }} />
+        <div className="auth-logo" style={{ marginBottom:0 }}>HABITQUEST</div>
+      </div>
       <div className="auth-tagline">{lang==='es'?'Forja tu leyenda, un hábito a la vez':'Forge your legend, one habit at a time'}</div>
 
       <div className="auth-card">

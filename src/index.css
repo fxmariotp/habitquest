@@ -222,7 +222,7 @@ body {
   bottom: 0; left: 0; right: 0;
   background: var(--panel);
   border-top: 1px solid var(--border);
-  z-index: 100;
+  z-index: 50;
   padding: 10px 0 max(12px, env(safe-area-inset-bottom));
   box-shadow: 0 -4px 20px rgba(0,0,0,.12);
   backdrop-filter: blur(12px);
@@ -233,11 +233,11 @@ body {
   .bottom-nav { display: flex; }
   .tabs { display: none; }
 
-  /* header sticky on mobile */
+  /* header sticky on mobile — z-index BELOW overlay */
   .app-header {
     position: sticky;
     top: 0;
-    z-index: 80;
+    z-index: 50;
     background: var(--bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -577,8 +577,8 @@ body {
 /* ─── MODAL ─────────────────────────────────── */
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,.5);
-  z-index: 1000;
+  background: rgba(0,0,0,.6);
+  z-index: 500;
   display: flex; align-items: flex-end; justify-content: center;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);

@@ -4,6 +4,8 @@ import { DIFF_EXP, ACHIEVEMENTS, getClass, streakIcon, streakMultiplier, todaySt
 import Sidebar from '../components/Sidebar'
 import SocialPage from './SocialPage'
 import ProfilePage from './ProfilePage'
+import RewardsPage from './RewardsPage'
+import DayHeader from '../components/DayHeader'
 
 const CARD_COLORS = ['hc-0','hc-1','hc-2','hc-3','hc-4','hc-5']
 
@@ -28,7 +30,7 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
   const NAV = [
     { id:'habits',  icon:'⚔️', label: lang==='en'?'Habits':'Hábitos' },
     { id:'goals',   icon:'🎯', label: lang==='en'?'Goals':'Metas' },
-    { id:'stats',   icon:'📊', label: 'Stats' },
+    { id:'rewards', icon:'🎁', label: lang==='en'?'Rewards':'Premios' },
     { id:'social',  icon:'👥', label: 'Social' },
     { id:'profile', icon:'👤', label: lang==='en'?'Profile':'Perfil' },
   ]
@@ -36,6 +38,7 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
   const ALL_TABS = [
     { id:'habits',  icon:'⚔️', label: lang==='en'?'Habits':'Hábitos' },
     { id:'goals',   icon:'🎯', label: lang==='en'?'Goals':'Metas' },
+    { id:'rewards', icon:'🎁', label: lang==='en'?'Rewards':'Premios' },
     { id:'stats',   icon:'📊', label: 'Stats' },
     { id:'social',  icon:'👥', label: 'Social' },
     { id:'profile', icon:'👤', label: lang==='en'?'Profile':'Perfil' },
@@ -58,10 +61,12 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
 
   return (
     <div className="app">
-      {/* Header — solo logo en móvil */}
+      {/* Header */}
       <header className="app-header">
-        <div style={{ fontFamily:'var(--mono)', fontSize:18, fontWeight:700 }}>⚔ HABITQUEST</div>
-        {/* Desktop extra buttons */}
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <img src="/logo.png" alt="HabitQuest" style={{ width:36, height:36, borderRadius:8, objectFit:'cover' }} />
+          <span style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:700, letterSpacing:-0.5 }}>HABITQUEST</span>
+        </div>
         <div className="header-actions header-desktop-only" style={{ display:'flex', gap:8 }}>
           <button className="btn-icon" onClick={()=>setTheme(theme==='dark'?'light':'dark')}>
             {theme==='dark'?'☀️':'🌙'}
@@ -90,6 +95,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
               <div className="sec-head">
                 <div className="sec-title">{lang==='en'?'Daily Missions':'Misiones diarias'}</div>
               </div>
+
+              <DayHeader lang={lang} />
 
               {multi>1 && (
                 <div className="multiplier-banner">
@@ -135,8 +142,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                         </div>
                       </div>
                       <button className={`habit-check-btn ${h.done_today?'done':''}`}
-                        onClick={e=>{ e.stopPropagation(); completeHabit(h.id, e.clientX, e.clientY) }}
-                        disabled={h.done_today}>
+                        title={h.done_today?(lang==='en'?'Tap to undo':'Pulsa para desmarcar'):(lang==='en'?'Mark as done':'Marcar como hecho')}
+                        onClick={e=>{ e.stopPropagation(); completeHabit(h.id, e.clientX, e.clientY) }}>
                         {h.done_today?'✓':''}
                       </button>
                     </div>
@@ -245,13 +252,27 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                   {(profile?.exp_to_next||100)-(profile?.exp||0)} EXP {lang==='en'?'to next level':'para siguiente nivel'}
                 </div>
               </div>
-              <button className="btn btn-ghost" style={{ marginTop:12 }} onClick={()=>{
-                const a=document.createElement('a')
-                a.href=URL.createObjectURL(new Blob([JSON.stringify({profile,habits,goals,achievements},null,2)],{type:'application/json'}))
-                a.download=`habitquest-${todayStr()}.json`; a.click()
-              }}>{t(lang,'exportData')}</button>
+              <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
+                <button className="btn btn-ghost" onClick={()=>{
+                  const a=document.createElement('a')
+                  a.href=URL.createObjectURL(new Blob([JSON.stringify({profile,habits,goals,achievements},null,2)],{type:'application/json'}))
+                  a.download=`habitquest-${todayStr()}.json`; a.click()
+                }}>{t(lang,'exportData')}</button>
+                {profile?.username && (
+                  <button className="btn btn-ghost" onClick={()=>{
+                    const url=`${window.location.origin}/u/${profile.username}`
+                    navigator.clipboard.writeText(url)
+                    .then(()=>alert(lang==='en'?'Profile link copied!':'¡Enlace de perfil copiado!'))
+                  }}>
+                    🔗 {lang==='en'?'Share profile':'Compartir perfil'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
+
+          {/* ── REWARDS ── */}
+          {tab==='rewards' && <RewardsPage profile={profile} lang={lang} />}
 
           {/* ── SOCIAL ── */}
           {tab==='social' && <SocialPage userId={userId} lang={lang} />}
