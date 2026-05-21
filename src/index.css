@@ -223,12 +223,33 @@ body {
   background: var(--panel);
   border-top: 1px solid var(--border);
   z-index: 100;
-  padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  padding: 10px 0 max(12px, env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0,0,0,.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 @media (max-width: 700px) {
   .bottom-nav { display: flex; }
   .tabs { display: none; }
+
+  /* header sticky on mobile */
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    background: var(--bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding-top: max(20px, env(safe-area-inset-top));
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* header only shows logo + theme toggle on mobile */
+  .header-desktop-only { display: none; }
 }
 
 .nav-item {

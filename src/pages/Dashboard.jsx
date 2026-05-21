@@ -61,18 +61,22 @@ export default function Dashboard({ game, userId, onLogout, theme, toggleTheme }
       <header className="app-header">
         <div style={{ fontFamily:'var(--mono)', fontSize:18, fontWeight:700 }}>⚔ HABITQUEST</div>
         <div className="header-actions">
-          {['es','en'].map(l=>(
-            <button key={l} className="btn btn-ghost btn-sm"
-              style={{ fontWeight:lang===l?700:400, padding:'6px 10px' }}
-              onClick={()=>updateProfile({language:l})}>{l.toUpperCase()}</button>
-          ))}
-          <button className="btn-icon" onClick={toggleTheme} title={theme==='dark'?'Modo claro':'Modo oscuro'}>
+          {/* Desktop: lang + sound + logout */}
+          <span className="header-desktop-only" style={{display:'contents'}}>
+            {['es','en'].map(l=>(
+              <button key={l} className="btn btn-ghost btn-sm"
+                style={{ fontWeight:lang===l?700:400, padding:'6px 10px' }}
+                onClick={()=>updateProfile({language:l})}>{l.toUpperCase()}</button>
+            ))}
+            <button className="btn-icon" onClick={()=>updateProfile({sound_on:!profile?.sound_on})}>
+              {profile?.sound_on?'🔊':'🔇'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={onLogout}>{t(lang,'logout')}</button>
+          </span>
+          {/* Siempre visible: theme toggle */}
+          <button className="btn-icon" onClick={toggleTheme}>
             {theme==='dark'?'☀️':'🌙'}
           </button>
-          <button className="btn-icon" onClick={()=>updateProfile({sound_on:!profile?.sound_on})} title="Sonido">
-            {profile?.sound_on?'🔊':'🔇'}
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={onLogout}>{t(lang,'logout')}</button>
         </div>
       </header>
 
@@ -97,27 +101,9 @@ export default function Dashboard({ game, userId, onLogout, theme, toggleTheme }
             <div>
               <div className="sec-head">
                 <div className="sec-title">{lang==='en'?'Daily Missions':'Misiones diarias'}</div>
-                <button className="btn btn-primary" onClick={()=>setHabit(true)}>+ {lang==='en'?'New':'Nuevo'}</button>
               </div>
 
-              {/* Heatmap */}
-              <div className="heatmap-wrap">
-                <div style={{fontFamily:'var(--mono)',fontSize:11,letterSpacing:1,color:'var(--text2)',marginBottom:10}}>
-                  {lang==='en'?'LAST 84 DAYS':'RACHA ÚLTIMOS 84 DÍAS'}
-                </div>
-                <div className="hm-grid">
-                  {buildHeatmap().map(c=>(
-                    <div key={c.key} className={`hm-cell hm-${c.lvl}`} title={c.key} />
-                  ))}
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,fontSize:11,color:'var(--text3)'}}>
-                  <span>{lang==='en'?'Less':'Menos'}</span>
-                  {[0,1,2,3,4].map(l=><div key={l} className={`hm-cell hm-${l}`} style={{width:11,height:11}}/>)}
-                  <span>{lang==='en'?'More':'Más'}</span>
-                </div>
-              </div>
-
-              {/* Multiplier */}
+              {/* Multiplier banner */}
               {multi>1 && (
                 <div className="multiplier-banner">
                   <span>🔥 {lang==='en'?'Streak multiplier active':'Multiplicador de racha activo'}</span>
@@ -125,8 +111,25 @@ export default function Dashboard({ game, userId, onLogout, theme, toggleTheme }
                 </div>
               )}
 
+              {/* Habit list — primero */}
               {habits.length===0
-                ? <div className="empty">{lang==='en'?'No habits yet. Start your adventure!':'Sin hábitos. ¡Empieza tu aventura!'}</div>
+                ? (
+                  <div style={{textAlign:'center',padding:'60px 20px'}}>
+                    <div style={{fontSize:56,marginBottom:16}}>⚔️</div>
+                    <div style={{fontSize:20,fontWeight:800,marginBottom:8}}>
+                      {lang==='en'?'Your adventure starts here':'Tu aventura empieza aquí'}
+                    </div>
+                    <div style={{fontSize:15,color:'var(--text2)',marginBottom:28}}>
+                      {lang==='en'
+                        ?'Add your first habit and start levelling up'
+                        :'Añade tu primer hábito y empieza a subir de nivel'}
+                    </div>
+                    <button className="btn btn-primary" style={{fontSize:16,padding:'14px 32px'}}
+                      onClick={()=>setHabit(true)}>
+                      {lang==='en'?'+ Add first habit':'+ Añadir primer hábito'}
+                    </button>
+                  </div>
+                )
                 : habits.map((h,i)=>{
                   const base=DIFF_EXP[h.difficulty]; const final=Math.floor(base*multi)
                   const icon=streakIcon(h.streak)
@@ -139,7 +142,6 @@ export default function Dashboard({ game, userId, onLogout, theme, toggleTheme }
                           ⚡ {h.streak||0}
                           {h.streak>0 && <span>{icon}</span>}
                         </div>
-                        {/* 7-day dots — placeholder circles for now */}
                         <div className="week-checks">
                           {[0,1,2,3,4,5,6].map(d=>(
                             <div key={d} className={`week-dot ${d===6&&h.done_today?'filled':''}`} />
@@ -158,7 +160,7 @@ export default function Dashboard({ game, userId, onLogout, theme, toggleTheme }
                           {h.done_today?'✓':''}
                         </button>
                       </div>
-                      {/* Delete on hover */}
+                      {/* Delete on hover/press */}
                       <div className="habit-card-actions">
                         <button className="btn-icon" style={{width:26,height:26,fontSize:12,background:'rgba(0,0,0,.15)',color:'var(--ct)'}}
                           onClick={()=>{if(confirm(t(lang,'deleteConfirm')))deleteHabit(h.id)}}>✕</button>
@@ -166,6 +168,30 @@ export default function Dashboard({ game, userId, onLogout, theme, toggleTheme }
                     </div>
                   )
                 })}
+
+              {/* Heatmap — al final, 30 días, sin scroll */}
+              {habits.length > 0 && (
+                <div className="heatmap-wrap" style={{marginTop:8}}>
+                  <div style={{fontFamily:'var(--mono)',fontSize:10,letterSpacing:1,color:'var(--text3)',marginBottom:10}}>
+                    {lang==='en'?'LAST 30 DAYS':'ÚLTIMOS 30 DÍAS'}
+                  </div>
+                  <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                    {Array.from({length:30},(_,i)=>{
+                      const d=new Date(); d.setDate(d.getDate()-(29-i))
+                      return { key:d.toISOString().split('T')[0], lvl:0 }
+                    }).map(c=>(
+                      <div key={c.key} className={`hm-cell hm-${c.lvl}`}
+                        style={{width:'calc((100% - 29*4px) / 30)', minWidth:8}}
+                        title={c.key} />
+                    ))}
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:5,marginTop:8,fontSize:11,color:'var(--text3)'}}>
+                    <span>{lang==='en'?'Less':'Menos'}</span>
+                    {[0,1,2,3,4].map(l=><div key={l} className={`hm-cell hm-${l}`} style={{width:10,height:10}}/>)}
+                    <span>{lang==='en'?'More':'Más'}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -275,18 +301,26 @@ export default function Dashboard({ game, userId, onLogout, theme, toggleTheme }
         </main>
       </div>
 
+      {/* FAB flotante */}
+      {(tab==='habits' || tab==='goals') && (
+        <button onClick={()=> tab==='habits' ? setHabit(true) : setGoal(true)}
+          style={{position:'fixed',bottom:90,right:20,width:58,height:58,borderRadius:'50%',background:'var(--accent)',color:'var(--accent-fg)',border:'none',fontSize:30,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(0,0,0,.35)',cursor:'pointer',zIndex:90,transition:'transform .15s'}}>+</button>
+      )}
+
       {/* MOBILE BOTTOM NAV */}
       <nav className="bottom-nav">
-        {navItems.map(item=>(
+        {[
+          {id:'habits',       icon:'⚔️', label: lang==='en'?'Habits':'Hábitos'},
+          {id:'goals',        icon:'🎯', label: lang==='en'?'Goals':'Metas'},
+          {id:'achievements', icon:'🏆', label: lang==='en'?'Trophies':'Logros'},
+          {id:'feed',         icon:'📡', label: 'Feed'},
+          {id:'profile',      icon:'👤', label: lang==='en'?'Profile':'Perfil'},
+        ].map(item=>(
           <button key={item.id} className={`nav-item ${tab===item.id?'on':''}`} onClick={()=>setTab(item.id)}>
             <span className="nav-item-icon">{item.icon}</span>
             <span>{item.label}</span>
           </button>
         ))}
-        <button className={`nav-item ${tab==='profile'||tab==='stats'?'on':''}`} onClick={()=>setTab('profile')}>
-          <span className="nav-item-icon">👤</span>
-          <span>{lang==='en'?'Profile':'Perfil'}</span>
-        </button>
       </nav>
 
       {/* MODAL HÁBITO */}
