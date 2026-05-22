@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { t } from '../i18n/translations'
 import { DIFF_EXP, ACHIEVEMENTS, getClass, streakIcon, streakMultiplier, todayStr } from '../lib/game'
 import { supabase } from '../lib/supabase'
@@ -7,6 +7,9 @@ import SocialPage from './SocialPage'
 import ProfilePage from './ProfilePage'
 import RewardsPage from './RewardsPage'
 import DayHeader from '../components/DayHeader'
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { SortableHabitCard } from '../components/SortableHabitCard'
 
 const CARD_COLORS = ['hc-0','hc-1','hc-2','hc-3','hc-4','hc-5']
 
@@ -26,44 +29,21 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
 
   // ── Drag & drop state ──────────────────────────
   const [orderedHabits, setOrderedHabits] = useState([])
-  const [draggingId, setDraggingId]       = useState(null)
-  const listContainerRef = useRef(null)
-  const isDraggingRef    = useRef(false)
-  const dragIdxRef       = useRef(-1)
-  const touchStartRef    = useRef(null)
-  const longPressTimer   = useRef(null)
-  const itemRefs         = useRef([])
-  const orderedHabitsRef = useRef([])
-  // Stable handler for non-passive touchmove (prevents scroll during drag)
-  const blockScroll = useRef(e => { if (isDraggingRef.current) e.preventDefault() })
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   // Sync orderedHabits from habits, preserving drag-set order
   useEffect(() => {
-    if (isDraggingRef.current) return
     setOrderedHabits(prev => {
       const map = new Map(habits.map(h => [h.id, h]))
       const sameSet = prev.length === habits.length && prev.every(h => map.has(h.id))
       if (!sameSet) {
-        // Items added or removed: keep existing order, append new
         const kept  = prev.filter(h => map.has(h.id)).map(h => ({ ...h, ...map.get(h.id) }))
         const added = habits.filter(h => !prev.find(p => p.id === h.id))
         return [...kept, ...added]
       }
-      // Same set: update live fields (done_today, streak…) but preserve order
       return prev.map(h => ({ ...h, ...map.get(h.id) }))
     })
   }, [habits])
-
-  // Keep orderedHabitsRef current so drag handlers avoid stale closures
-  useEffect(() => { orderedHabitsRef.current = orderedHabits }, [orderedHabits])
-
-  // Attach non-passive touchmove listener to whichever container is mounted
-  const setListRef = useCallback(el => {
-    if (listContainerRef.current)
-      listContainerRef.current.removeEventListener('touchmove', blockScroll.current)
-    listContainerRef.current = el
-    if (el) el.addEventListener('touchmove', blockScroll.current, { passive: false })
-  }, [])
 
   if (loading) return <div className="loading">CARGANDO...</div>
 
@@ -94,84 +74,15 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
     )
   }
 
-  function onDragStart(e, i) {
-    dragIdxRef.current = i
-    isDraggingRef.current = true
-    setDraggingId(orderedHabitsRef.current[i]?.id)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  function onDragOver(e, i) {
-    e.preventDefault()
-    const from = dragIdxRef.current
-    if (from === i || from === -1) return
+  function handleDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
     setOrderedHabits(prev => {
-      const next = [...prev]
-      const [item] = next.splice(from, 1)
-      next.splice(i, 0, item)
+      const from = prev.findIndex(h => h.id === active.id)
+      const to   = prev.findIndex(h => h.id === over.id)
+      const next = arrayMove(prev, from, to)
+      saveReorder(next)
       return next
     })
-    dragIdxRef.current = i
-  }
-
-  function onDragEnd() {
-    isDraggingRef.current = false
-    dragIdxRef.current = -1
-    setDraggingId(null)
-    saveReorder(orderedHabitsRef.current)
-  }
-
-  function handleTouchStart(e, i) {
-    const t = e.touches[0]
-    touchStartRef.current = { x: t.clientX, y: t.clientY }
-    longPressTimer.current = setTimeout(() => {
-      isDraggingRef.current = true
-      dragIdxRef.current = i
-      setDraggingId(orderedHabitsRef.current[i]?.id)
-      if (navigator.vibrate) navigator.vibrate(40)
-    }, 450)
-  }
-
-  function handleTouchMove(e) {
-    if (!touchStartRef.current) return
-    const touch = e.touches[0]
-    if (!isDraggingRef.current) {
-      // Cancel longpress if finger moved too much (it's a scroll)
-      if (Math.abs(touch.clientX - touchStartRef.current.x) > 8 ||
-          Math.abs(touch.clientY - touchStartRef.current.y) > 8) {
-        clearTimeout(longPressTimer.current)
-        touchStartRef.current = null
-      }
-      return
-    }
-    const touchY = touch.clientY
-    const from   = dragIdxRef.current
-    let to = from
-    itemRefs.current.forEach((el, i) => {
-      if (!el) return
-      const r = el.getBoundingClientRect()
-      if (touchY >= r.top && touchY <= r.bottom) to = i
-    })
-    if (to !== from) {
-      setOrderedHabits(prev => {
-        const next = [...prev]
-        const [item] = next.splice(from, 1)
-        next.splice(to, 0, item)
-        return next
-      })
-      dragIdxRef.current = to
-    }
-  }
-
-  function handleTouchEnd() {
-    clearTimeout(longPressTimer.current)
-    if (isDraggingRef.current) {
-      isDraggingRef.current = false
-      setDraggingId(null)
-      saveReorder(orderedHabitsRef.current)
-    }
-    touchStartRef.current = null
-    dragIdxRef.current = -1
   }
 
   // ── Habit edit sheet ──────────────────────────
@@ -253,92 +164,95 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                   </button>
                 </div>
               ) : checklistView ? (
-                <div ref={setListRef}
-                  style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:16, padding:'0 20px', boxShadow:'var(--shadow)' }}
-                  onTouchMove={handleTouchMove}>
-                  {orderedHabits.map((h, i) => (
-                    <div key={h.id}
-                      ref={el => { itemRefs.current[i] = el }}
-                      draggable
-                      onDragStart={e => onDragStart(e, i)}
-                      onDragOver={e => onDragOver(e, i)}
-                      onDragEnd={onDragEnd}
-                      onTouchStart={e => handleTouchStart(e, i)}
-                      onTouchEnd={handleTouchEnd}
-                      style={{ display:'flex', alignItems:'center', gap:12, padding:'15px 0',
-                        borderBottom: i < orderedHabits.length-1 ? '1px solid var(--border)' : 'none',
-                        opacity: draggingId === h.id ? 0.4 : 1,
-                        transition:'opacity .15s',
-                        userSelect:'none' }}>
-                      <div style={{ cursor:'grab', color:'var(--text3)', fontSize:18, flexShrink:0,
-                        padding:'0 2px', lineHeight:1, touchAction:'none' }}>⠿</div>
-                      <button
-                        onClick={e => { if (!h.done_today) completeHabit(h.id, e.clientX, e.clientY) }}
-                        style={{ width:28, height:28, borderRadius:'50%', flexShrink:0,
-                          border: h.done_today ? 'none' : '2px solid var(--text3)',
-                          background: h.done_today ? 'var(--accent)' : 'transparent',
-                          cursor: h.done_today ? 'default' : 'pointer',
-                          display:'flex', alignItems:'center', justifyContent:'center',
-                          color:'var(--accent-fg)', fontSize:14, fontWeight:700,
-                          transition:'all .2s' }}>
-                        {h.done_today ? '✓' : ''}
-                      </button>
-                      <span style={{ fontSize:18, fontWeight:600, transition:'all .2s', flex:1,
-                        color: h.done_today ? 'var(--text3)' : 'var(--text)',
-                        textDecoration: h.done_today ? 'line-through' : 'none' }}>
-                        {h.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div ref={setListRef} onTouchMove={handleTouchMove}>
-                  {orderedHabits.map((h,i) => {
-                    const final    = Math.floor(DIFF_EXP[h.difficulty] * multi)
-                    const colorCls = CARD_COLORS[i % CARD_COLORS.length]
-                    const icon     = streakIcon(h.streak)
-                    return (
-                      <div key={h.id}
-                        ref={el => { itemRefs.current[i] = el }}
-                        className={`habit-card ${colorCls} ${h.done_today?'done-card':''}`}
-                        draggable
-                        onDragStart={e => onDragStart(e, i)}
-                        onDragOver={e => onDragOver(e, i)}
-                        onDragEnd={onDragEnd}
-                        onTouchStart={e => handleTouchStart(e, i)}
-                        onTouchEnd={handleTouchEnd}
-                        onClick={() => { if(!h.done_today) setEditHabit(h) }}
-                        style={{ cursor: h.done_today?'default':'pointer',
-                          opacity: draggingId === h.id ? 0.4 : 1,
-                          transition:'opacity .15s',
-                          userSelect:'none' }}>
-                        <div className="habit-card-top">
-                          <div style={{ cursor:'grab', fontSize:16, opacity:0.6,
-                            lineHeight:1, touchAction:'none', marginRight:4 }}>⠿</div>
-                          <div className="habit-streak">⚡ {h.streak||0}{h.streak>0&&<span>{icon}</span>}</div>
-                          <div className="week-checks">
-                            {[0,1,2,3,4,5,6].map(d=>(
-                              <div key={d} className={`week-dot ${d===6&&h.done_today?'filled':''}`} />
-                            ))}
-                          </div>
-                        </div>
-                        <div className="habit-card-bottom">
-                          <div>
-                            <div className="habit-title">{h.name}</div>
-                            <div className="habit-sub">
-                              +{final} EXP · <span className={`diff-pill dp-${h.difficulty}`}>{t(lang,`difficulties.${h.difficulty}`)}</span>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:16, padding:'0 20px', boxShadow:'var(--shadow)' }}>
+                    <SortableContext items={orderedHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
+                      {orderedHabits.map((h, i) => (
+                        <SortableHabitCard key={h.id} id={h.id}>
+                          {({ listeners, isDragging }) => (
+                            <div style={{ display:'flex', alignItems:'center', gap:12, padding:'15px 0',
+                              borderBottom: i < orderedHabits.length-1 ? '1px solid var(--border)' : 'none',
+                              opacity: isDragging ? 0.4 : 1,
+                              background: isDragging ? 'var(--panel)' : 'transparent',
+                              boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.2)' : 'none',
+                              borderRadius: isDragging ? 12 : 0,
+                              transition:'opacity .15s, box-shadow .15s',
+                              userSelect:'none' }}>
+                              <div {...listeners} style={{ cursor:'grab', color:'var(--text3)', fontSize:18, flexShrink:0,
+                                padding:'0 2px', lineHeight:1, touchAction:'none' }}>⠿</div>
+                              <button
+                                onClick={e => { if (!h.done_today) completeHabit(h.id, e.clientX, e.clientY) }}
+                                style={{ width:28, height:28, borderRadius:'50%', flexShrink:0,
+                                  border: h.done_today ? 'none' : '2px solid var(--text3)',
+                                  background: h.done_today ? 'var(--accent)' : 'transparent',
+                                  cursor: h.done_today ? 'default' : 'pointer',
+                                  display:'flex', alignItems:'center', justifyContent:'center',
+                                  color:'var(--accent-fg)', fontSize:14, fontWeight:700,
+                                  transition:'all .2s' }}>
+                                {h.done_today ? '✓' : ''}
+                              </button>
+                              <span style={{ fontSize:18, fontWeight:600, transition:'all .2s', flex:1,
+                                color: h.done_today ? 'var(--text3)' : 'var(--text)',
+                                textDecoration: h.done_today ? 'line-through' : 'none' }}>
+                                {h.name}
+                              </span>
                             </div>
-                          </div>
-                          <button className={`habit-check-btn ${h.done_today?'done':''}`}
-                            title={h.done_today?(lang==='en'?'Tap to undo':'Pulsa para desmarcar'):(lang==='en'?'Mark as done':'Marcar como hecho')}
-                            onClick={e=>{ e.stopPropagation(); completeHabit(h.id, e.clientX, e.clientY) }}>
-                            {h.done_today?'✓':''}
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                          )}
+                        </SortableHabitCard>
+                      ))}
+                    </SortableContext>
+                  </div>
+                </DndContext>
+              ) : (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <div>
+                    <SortableContext items={orderedHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
+                      {orderedHabits.map((h, i) => {
+                        const final    = Math.floor(DIFF_EXP[h.difficulty] * multi)
+                        const colorCls = CARD_COLORS[i % CARD_COLORS.length]
+                        const icon     = streakIcon(h.streak)
+                        return (
+                          <SortableHabitCard key={h.id} id={h.id}>
+                            {({ listeners, isDragging }) => (
+                              <div
+                                className={`habit-card ${colorCls} ${h.done_today?'done-card':''}`}
+                                onClick={() => { if(!h.done_today) setEditHabit(h) }}
+                                style={{ cursor: h.done_today?'default':'pointer',
+                                  opacity: isDragging ? 0.5 : 1,
+                                  boxShadow: isDragging ? '0 12px 32px rgba(0,0,0,.35)' : undefined,
+                                  transition:'opacity .15s, box-shadow .15s',
+                                  userSelect:'none' }}>
+                                <div className="habit-card-top">
+                                  <div {...listeners} style={{ cursor:'grab', fontSize:16, opacity:0.6,
+                                    lineHeight:1, touchAction:'none', marginRight:4 }}>⠿</div>
+                                  <div className="habit-streak">⚡ {h.streak||0}{h.streak>0&&<span>{icon}</span>}</div>
+                                  <div className="week-checks">
+                                    {[0,1,2,3,4,5,6].map(d=>(
+                                      <div key={d} className={`week-dot ${d===6&&h.done_today?'filled':''}`} />
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="habit-card-bottom">
+                                  <div>
+                                    <div className="habit-title">{h.name}</div>
+                                    <div className="habit-sub">
+                                      +{final} EXP · <span className={`diff-pill dp-${h.difficulty}`}>{t(lang,`difficulties.${h.difficulty}`)}</span>
+                                    </div>
+                                  </div>
+                                  <button className={`habit-check-btn ${h.done_today?'done':''}`}
+                                    title={h.done_today?(lang==='en'?'Tap to undo':'Pulsa para desmarcar'):(lang==='en'?'Mark as done':'Marcar como hecho')}
+                                    onClick={e=>{ e.stopPropagation(); completeHabit(h.id, e.clientX, e.clientY) }}>
+                                    {h.done_today?'✓':''}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </SortableHabitCard>
+                        )
+                      })}
+                    </SortableContext>
+                  </div>
+                </DndContext>
               )}
 
               {/* Heatmap al final, 30 días */}
