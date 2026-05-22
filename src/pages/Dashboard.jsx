@@ -31,7 +31,7 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
   const [orderedHabits, setOrderedHabits] = useState([])
   const [activeId, setActiveId] = useState(null)
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor,   { activationConstraint: { distance: 8 } })
   )
 
@@ -188,8 +188,6 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                               transition:'opacity .15s',
                               userSelect:'none', WebkitUserSelect:'none' }}>
                               <div {...listeners}
-                                onMouseDown={e => e.preventDefault()}
-                                onTouchStart={e => e.preventDefault()}
                                 style={{ cursor:'grab', color:'var(--text3)', fontSize:18, flexShrink:0,
                                   padding:'0 2px', lineHeight:1,
                                   touchAction:'none', userSelect:'none', WebkitUserSelect:'none',
@@ -257,8 +255,6 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                                   WebkitTouchCallout:'none' }}>
                                 <div className="habit-card-top">
                                   <div {...listeners}
-                                    onMouseDown={e => e.preventDefault()}
-                                    onTouchStart={e => e.preventDefault()}
                                     style={{ cursor:'grab', fontSize:16, opacity:0.6,
                                       lineHeight:1, marginRight:4,
                                       touchAction:'none', userSelect:'none', WebkitUserSelect:'none',
