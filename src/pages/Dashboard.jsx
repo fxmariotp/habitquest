@@ -7,7 +7,7 @@ import SocialPage from './SocialPage'
 import ProfilePage from './ProfilePage'
 import RewardsPage from './RewardsPage'
 import DayHeader from '../components/DayHeader'
-import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
+import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { SortableHabitCard } from '../components/SortableHabitCard'
 
@@ -29,7 +29,10 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
 
   // ── Drag & drop state ──────────────────────────
   const [orderedHabits, setOrderedHabits] = useState([])
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } })
+  )
 
   // Sync orderedHabits from habits, preserving drag-set order
   useEffect(() => {
@@ -177,9 +180,14 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                               boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.2)' : 'none',
                               borderRadius: isDragging ? 12 : 0,
                               transition:'opacity .15s, box-shadow .15s',
-                              userSelect:'none' }}>
-                              <div {...listeners} style={{ cursor:'grab', color:'var(--text3)', fontSize:18, flexShrink:0,
-                                padding:'0 2px', lineHeight:1, touchAction:'none' }}>⠿</div>
+                              userSelect:'none', WebkitUserSelect:'none' }}>
+                              <div {...listeners}
+                                onMouseDown={e => e.preventDefault()}
+                                onTouchStart={e => e.preventDefault()}
+                                style={{ cursor:'grab', color:'var(--text3)', fontSize:18, flexShrink:0,
+                                  padding:'0 2px', lineHeight:1,
+                                  touchAction:'none', userSelect:'none', WebkitUserSelect:'none',
+                                  WebkitTouchCallout:'none' }}>⠿</div>
                               <button
                                 onClick={e => { if (!h.done_today) completeHabit(h.id, e.clientX, e.clientY) }}
                                 style={{ width:28, height:28, borderRadius:'50%', flexShrink:0,
@@ -193,7 +201,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                               </button>
                               <span style={{ fontSize:18, fontWeight:600, transition:'all .2s', flex:1,
                                 color: h.done_today ? 'var(--text3)' : 'var(--text)',
-                                textDecoration: h.done_today ? 'line-through' : 'none' }}>
+                                textDecoration: h.done_today ? 'line-through' : 'none',
+                                userSelect:'none', WebkitUserSelect:'none' }}>
                                 {h.name}
                               </span>
                             </div>
@@ -221,11 +230,19 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                                   opacity: isDragging ? 0.5 : 1,
                                   boxShadow: isDragging ? '0 12px 32px rgba(0,0,0,.35)' : undefined,
                                   transition:'opacity .15s, box-shadow .15s',
-                                  userSelect:'none' }}>
+                                  userSelect:'none', WebkitUserSelect:'none',
+                                  WebkitTouchCallout:'none' }}>
                                 <div className="habit-card-top">
-                                  <div {...listeners} style={{ cursor:'grab', fontSize:16, opacity:0.6,
-                                    lineHeight:1, touchAction:'none', marginRight:4 }}>⠿</div>
-                                  <div className="habit-streak">⚡ {h.streak||0}{h.streak>0&&<span>{icon}</span>}</div>
+                                  <div {...listeners}
+                                    onMouseDown={e => e.preventDefault()}
+                                    onTouchStart={e => e.preventDefault()}
+                                    style={{ cursor:'grab', fontSize:16, opacity:0.6,
+                                      lineHeight:1, marginRight:4,
+                                      touchAction:'none', userSelect:'none', WebkitUserSelect:'none',
+                                      WebkitTouchCallout:'none' }}>⠿</div>
+                                  <div className="habit-streak" style={{ userSelect:'none', WebkitUserSelect:'none' }}>
+                                    ⚡ {h.streak||0}{h.streak>0&&<span>{icon}</span>}
+                                  </div>
                                   <div className="week-checks">
                                     {[0,1,2,3,4,5,6].map(d=>(
                                       <div key={d} className={`week-dot ${d===6&&h.done_today?'filled':''}`} />
@@ -234,8 +251,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                                 </div>
                                 <div className="habit-card-bottom">
                                   <div>
-                                    <div className="habit-title">{h.name}</div>
-                                    <div className="habit-sub">
+                                    <div className="habit-title" style={{ userSelect:'none', WebkitUserSelect:'none' }}>{h.name}</div>
+                                    <div className="habit-sub" style={{ userSelect:'none', WebkitUserSelect:'none' }}>
                                       +{final} EXP · <span className={`diff-pill dp-${h.difficulty}`}>{t(lang,`difficulties.${h.difficulty}`)}</span>
                                     </div>
                                   </div>

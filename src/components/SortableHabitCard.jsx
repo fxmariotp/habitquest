@@ -12,6 +12,9 @@ export function SortableHabitCard({ id, children }) {
         transition: transition ?? 'transform 250ms ease',
         position: 'relative',
         zIndex: isDragging ? 100 : 'auto',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
       }}
       {...attributes}
     >
