@@ -5,7 +5,8 @@ const REACTION_EMOJIS = ['👊','🔥','💪','⚡','🎯','👑']
 
 export default function SocialPage({ userId, lang }) {
   const [view, setView]               = useState('feed')
-  const [squad, setSquad]             = useState(null)
+  const [squads, setSquads]           = useState([])
+  const [activeSquadIdx, setActiveSquadIdx] = useState(0)
   const [squadLoading, setSquadLoading] = useState(true)
   const [events, setEvents]           = useState([])
   const [reactions, setReactions]     = useState({})
@@ -14,11 +15,18 @@ export default function SocialPage({ userId, lang }) {
   const [squadName, setSquadName]     = useState('')
   const [joinCode, setJoinCode]       = useState('')
   const [msg, setMsg]                 = useState('')
+  const [showJoinPanel, setShowJoinPanel] = useState(false)
   const squadRef = useRef(null)
+
+  const squad = squads[activeSquadIdx] || null
 
   useEffect(() => {
     loadSquad()
   }, [])
+
+  useEffect(() => {
+    squadRef.current = squad
+  }, [squad?.id])
 
   // Polling cada 30s + realtime cuando está disponible
   useEffect(() => {
@@ -54,16 +62,34 @@ export default function SocialPage({ userId, lang }) {
       .from('squad_members')
       .select('*, squads(*)')
       .eq('user_id', userId)
-      .single()
 
-    const sq = data?.squads || null
-    setSquad(sq)
-    squadRef.current = sq
+    const sqs = (data || []).map(m => m.squads).filter(Boolean)
+    setSquads(sqs)
+    setActiveSquadIdx(0)
+    squadRef.current = sqs[0] || null
     setSquadLoading(false)
 
-    if (sq) {
-      await Promise.all([loadFeed(sq.id), loadLeaderboard(sq.id)])
+    if (sqs[0]) {
+      await Promise.all([loadFeed(sqs[0].id), loadLeaderboard(sqs[0].id)])
     }
+  }
+
+  async function switchSquad(idx) {
+    const sq = squads[idx]
+    if (!sq) return
+    setActiveSquadIdx(idx)
+    squadRef.current = sq
+    setEvents([])
+    setLeaderboard([])
+    setView('feed')
+    await Promise.all([loadFeed(sq.id), loadLeaderboard(sq.id)])
+  }
+
+  async function leaveSquad(squadId) {
+    if (!confirm(lang==='en' ? 'Leave this squad?' : '¿Salir de este escuadrón?')) return
+    await supabase.from('squad_members').delete().eq('squad_id', squadId).eq('user_id', userId)
+    setActiveSquadIdx(0)
+    await loadSquad()
   }
 
   async function getSquadMemberIds(squadId) {
@@ -213,7 +239,49 @@ export default function SocialPage({ userId, lang }) {
   // ── Sin escuadrón ──────────────────────────────
   if (squadLoading) return <div className="loading">...</div>
 
-  if (!squad) return (
+  function JoinCreatePanel() {
+    return (
+      <>
+        <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:12, padding:18, marginBottom:12, boxShadow:'var(--shadow)' }}>
+          <div style={{ fontFamily:'var(--mono)', fontSize:11, letterSpacing:1, color:'var(--text2)', marginBottom:12 }}>
+            {lang==='en'?'CREATE SQUAD':'CREAR ESCUADRÓN'}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <input className="form-input" style={{ flex:1 }}
+              placeholder={lang==='en'?'Squad name e.g. "The Grind"':'Nombre ej. "Los Fieras"'}
+              value={squadName} onChange={e=>{ setSquadName(e.target.value); setMsg('') }} />
+            <button className="btn btn-primary" onClick={createSquad}>
+              {lang==='en'?'Create':'Crear'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:12, padding:18, marginBottom:12, boxShadow:'var(--shadow)' }}>
+          <div style={{ fontFamily:'var(--mono)', fontSize:11, letterSpacing:1, color:'var(--text2)', marginBottom:12 }}>
+            {lang==='en'?'JOIN WITH CODE':'UNIRSE CON CÓDIGO'}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <input className="form-input"
+              style={{ flex:1, fontFamily:'var(--mono)', letterSpacing:3, textTransform:'uppercase' }}
+              placeholder="ABC123"
+              value={joinCode} onChange={e=>{ setJoinCode(e.target.value); setMsg('') }} />
+            <button className="btn btn-primary" onClick={joinSquad}>
+              {lang==='en'?'Join':'Unirse'}
+            </button>
+          </div>
+        </div>
+
+        {msg && (
+          <div style={{ background:'var(--bg3)', borderRadius:10, padding:'12px 16px', fontSize:14,
+            fontWeight:600, color: msg.includes('!')?'var(--d-easy)':'var(--red)', fontFamily:'var(--mono)' }}>
+            {msg}
+          </div>
+        )}
+      </>
+    )
+  }
+
+  if (squads.length === 0) return (
     <div>
       <div className="sec-head"><div className="sec-title">Social</div></div>
 
@@ -229,47 +297,30 @@ export default function SocialPage({ userId, lang }) {
         </div>
       </div>
 
-      <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:12, padding:18, marginBottom:12, boxShadow:'var(--shadow)' }}>
-        <div style={{ fontFamily:'var(--mono)', fontSize:11, letterSpacing:1, color:'var(--text2)', marginBottom:12 }}>
-          {lang==='en'?'CREATE SQUAD':'CREAR ESCUADRÓN'}
-        </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <input className="form-input" style={{ flex:1 }}
-            placeholder={lang==='en'?'Squad name e.g. "The Grind"':'Nombre ej. "Los Fieras"'}
-            value={squadName} onChange={e=>{ setSquadName(e.target.value); setMsg('') }} />
-          <button className="btn btn-primary" onClick={createSquad}>
-            {lang==='en'?'Create':'Crear'}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:12, padding:18, marginBottom:12, boxShadow:'var(--shadow)' }}>
-        <div style={{ fontFamily:'var(--mono)', fontSize:11, letterSpacing:1, color:'var(--text2)', marginBottom:12 }}>
-          {lang==='en'?'JOIN WITH CODE':'UNIRSE CON CÓDIGO'}
-        </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <input className="form-input"
-            style={{ flex:1, fontFamily:'var(--mono)', letterSpacing:3, textTransform:'uppercase' }}
-            placeholder="ABC123"
-            value={joinCode} onChange={e=>{ setJoinCode(e.target.value); setMsg('') }} />
-          <button className="btn btn-primary" onClick={joinSquad}>
-            {lang==='en'?'Join':'Unirse'}
-          </button>
-        </div>
-      </div>
-
-      {msg && (
-        <div style={{ background:'var(--bg3)', borderRadius:10, padding:'12px 16px', fontSize:14,
-          fontWeight:600, color: msg.includes('!')?'var(--d-easy)':'var(--red)', fontFamily:'var(--mono)' }}>
-          {msg}
-        </div>
-      )}
+      {JoinCreatePanel()}
     </div>
   )
 
   // ── Con escuadrón ──────────────────────────────
   return (
     <div>
+      {/* Tabs de múltiples squads */}
+      {squads.length > 1 && (
+        <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
+          {squads.map((sq, i) => (
+            <button key={sq.id} onClick={() => switchSquad(i)}
+              style={{ padding:'6px 14px', borderRadius:20, border:'2px solid',
+                borderColor: i===activeSquadIdx ? 'var(--accent)' : 'var(--border)',
+                background: i===activeSquadIdx ? 'var(--accent)' : 'var(--panel)',
+                color: i===activeSquadIdx ? 'var(--accent-fg)' : 'var(--text2)',
+                fontFamily:'var(--font)', fontSize:13, fontWeight:700, cursor:'pointer',
+                transition:'all .2s' }}>
+              {sq.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Squad header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
         <div>
@@ -300,13 +351,32 @@ export default function SocialPage({ userId, lang }) {
         </div>
       </div>
 
-      {/* Botón refresh manual */}
-      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:8 }}>
-        <button className="btn btn-ghost btn-sm" onClick={()=>{ loadFeed(); loadLeaderboard() }}
-          style={{ fontSize:12 }}>
-          ↻ {lang==='en'?'Refresh':'Actualizar'}
+      {/* Botón refresh manual + Salir del escuadrón */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <button className="btn btn-ghost btn-sm"
+          onClick={() => leaveSquad(squad.id)}
+          style={{ fontSize:12, color:'var(--red)', borderColor:'var(--red)' }}>
+          ✕ {lang==='en'?'Leave squad':'Salir del escuadrón'}
         </button>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <button className="btn btn-ghost btn-sm"
+            onClick={() => setShowJoinPanel(v => !v)}
+            style={{ fontSize:12 }}>
+            + {lang==='en'?'Join another':'Unirse a otro'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{ loadFeed(); loadLeaderboard() }}
+            style={{ fontSize:12 }}>
+            ↻ {lang==='en'?'Refresh':'Actualizar'}
+          </button>
+        </div>
       </div>
+
+      {/* Panel unirse a otro escuadrón */}
+      {showJoinPanel && (
+        <div style={{ marginBottom:12 }}>
+          {JoinCreatePanel()}
+        </div>
+      )}
 
       {dataLoading && <div className="loading" style={{ minHeight:80 }}>...</div>}
 

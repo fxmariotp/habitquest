@@ -19,6 +19,7 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
   const [goalModal,  setGoal]  = useState(false)
   const [editHabit,  setEditHabit] = useState(null)  // habit being edited
   const [selDiff, setSelDiff]  = useState('easy')
+  const [checklistView, setChecklistView] = useState(() => localStorage.getItem('hq_checklist') === '1')
   const hNameRef = useRef(); const hCatRef = useRef()
   const gNameRef = useRef(); const gTypeRef = useRef(); const gTargetRef = useRef()
 
@@ -94,6 +95,12 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
             <div>
               <div className="sec-head">
                 <div className="sec-title">{lang==='en'?'Daily Missions':'Misiones diarias'}</div>
+                <button
+                  onClick={() => { const n = !checklistView; setChecklistView(n); localStorage.setItem('hq_checklist', n?'1':'0') }}
+                  title={checklistView ? (lang==='en'?'Card view':'Vista tarjetas') : (lang==='en'?'Checklist':'Checklist')}
+                  style={{ background:'none', border:'1px solid var(--border)', borderRadius:8, padding:'5px 10px', cursor:'pointer', fontSize:16, color:'var(--text2)', lineHeight:1 }}>
+                  {checklistView ? '⊞' : '☰'}
+                </button>
               </div>
 
               <DayHeader lang={lang} />
@@ -117,6 +124,29 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                   <button className="btn btn-primary" style={{ fontSize:16, padding:'14px 32px' }} onClick={()=>setHabit(true)}>
                     + {lang==='en'?'Add first habit':'Añadir primer hábito'}
                   </button>
+                </div>
+              ) : checklistView ? (
+                <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:16, padding:'0 20px', boxShadow:'var(--shadow)' }}>
+                  {habits.map((h, i) => (
+                    <div key={h.id} style={{ display:'flex', alignItems:'center', gap:16, padding:'15px 0', borderBottom: i < habits.length-1 ? '1px solid var(--border)' : 'none' }}>
+                      <button
+                        onClick={e => { if (!h.done_today) completeHabit(h.id, e.clientX, e.clientY) }}
+                        style={{ width:28, height:28, borderRadius:'50%', flexShrink:0,
+                          border: h.done_today ? 'none' : '2px solid var(--text3)',
+                          background: h.done_today ? 'var(--accent)' : 'transparent',
+                          cursor: h.done_today ? 'default' : 'pointer',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          color:'var(--accent-fg)', fontSize:14, fontWeight:700,
+                          transition:'all .2s' }}>
+                        {h.done_today ? '✓' : ''}
+                      </button>
+                      <span style={{ fontSize:18, fontWeight:600, transition:'all .2s',
+                        color: h.done_today ? 'var(--text3)' : 'var(--text)',
+                        textDecoration: h.done_today ? 'line-through' : 'none' }}>
+                        {h.name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               ) : habits.map((h,i) => {
                 const final = Math.floor(DIFF_EXP[h.difficulty] * multi)
