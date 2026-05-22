@@ -736,3 +736,6 @@ body {
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* dnd-kit: disable pointer events on children of the drag overlay */
+[data-dnd-kit-dragging] * { pointer-events: none; }

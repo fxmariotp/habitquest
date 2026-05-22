@@ -7,7 +7,7 @@ import SocialPage from './SocialPage'
 import ProfilePage from './ProfilePage'
 import RewardsPage from './RewardsPage'
 import DayHeader from '../components/DayHeader'
-import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
+import { DndContext, DragOverlay, PointerSensor, TouchSensor, MeasuringStrategy, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { SortableHabitCard } from '../components/SortableHabitCard'
 
@@ -29,9 +29,10 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
 
   // ── Drag & drop state ──────────────────────────
   const [orderedHabits, setOrderedHabits] = useState([])
+  const [activeId, setActiveId] = useState(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } })
+    useSensor(TouchSensor,   { activationConstraint: { distance: 8 } })
   )
 
   // Sync orderedHabits from habits, preserving drag-set order
@@ -50,8 +51,10 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
 
   if (loading) return <div className="loading">CARGANDO...</div>
 
-  const multi = streakMultiplier(Math.max(0,...habits.map(h=>Math.max(h.streak||0,h.best_streak||0))))
-  const cls   = getClass(profile?.level||1, lang)
+  const multi       = streakMultiplier(Math.max(0,...habits.map(h=>Math.max(h.streak||0,h.best_streak||0))))
+  const cls         = getClass(profile?.level||1, lang)
+  const activeHabit = activeId ? orderedHabits.find(h => h.id === activeId) : null
+  const activeIdx   = activeHabit ? orderedHabits.indexOf(activeHabit) : -1
 
   const NAV = [
     { id:'habits',  icon:'⚔️', label: lang==='en'?'Habits':'Hábitos' },
@@ -77,7 +80,11 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
     )
   }
 
+  function handleDragStart({ active }) { setActiveId(active.id) }
+  function handleDragCancel()          { setActiveId(null) }
+
   function handleDragEnd({ active, over }) {
+    setActiveId(null)
     if (!over || active.id === over.id) return
     setOrderedHabits(prev => {
       const from = prev.findIndex(h => h.id === active.id)
@@ -167,7 +174,9 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                   </button>
                 </div>
               ) : checklistView ? (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <DndContext sensors={sensors} collisionDetection={closestCenter}
+                  measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+                  onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
                   <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:16, padding:'0 20px', boxShadow:'var(--shadow)' }}>
                     <SortableContext items={orderedHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
                       {orderedHabits.map((h, i) => (
@@ -175,11 +184,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                           {({ listeners, isDragging }) => (
                             <div style={{ display:'flex', alignItems:'center', gap:12, padding:'15px 0',
                               borderBottom: i < orderedHabits.length-1 ? '1px solid var(--border)' : 'none',
-                              opacity: isDragging ? 0.4 : 1,
-                              background: isDragging ? 'var(--panel)' : 'transparent',
-                              boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.2)' : 'none',
-                              borderRadius: isDragging ? 12 : 0,
-                              transition:'opacity .15s, box-shadow .15s',
+                              opacity: isDragging ? 0.25 : 1,
+                              transition:'opacity .15s',
                               userSelect:'none', WebkitUserSelect:'none' }}>
                               <div {...listeners}
                                 onMouseDown={e => e.preventDefault()}
@@ -211,9 +217,27 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                       ))}
                     </SortableContext>
                   </div>
+                  <DragOverlay dropAnimation={null}>
+                    {activeHabit && (
+                      <div style={{ display:'flex', alignItems:'center', gap:12, padding:'15px 20px',
+                        background:'var(--panel)', borderRadius:12,
+                        opacity:0.95, transform:'scale(1.02)',
+                        boxShadow:'0 20px 40px rgba(0,0,0,.3)', cursor:'grabbing',
+                        userSelect:'none', WebkitUserSelect:'none' }}>
+                        <div style={{ color:'var(--text3)', fontSize:18, flexShrink:0, padding:'0 2px', lineHeight:1 }}>⠿</div>
+                        <span style={{ fontSize:18, fontWeight:600, flex:1,
+                          color: activeHabit.done_today ? 'var(--text3)' : 'var(--text)',
+                          textDecoration: activeHabit.done_today ? 'line-through' : 'none' }}>
+                          {activeHabit.name}
+                        </span>
+                      </div>
+                    )}
+                  </DragOverlay>
                 </DndContext>
               ) : (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <DndContext sensors={sensors} collisionDetection={closestCenter}
+                  measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+                  onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
                   <div>
                     <SortableContext items={orderedHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
                       {orderedHabits.map((h, i) => {
@@ -227,9 +251,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                                 className={`habit-card ${colorCls} ${h.done_today?'done-card':''}`}
                                 onClick={() => { if(!h.done_today) setEditHabit(h) }}
                                 style={{ cursor: h.done_today?'default':'pointer',
-                                  opacity: isDragging ? 0.5 : 1,
-                                  boxShadow: isDragging ? '0 12px 32px rgba(0,0,0,.35)' : undefined,
-                                  transition:'opacity .15s, box-shadow .15s',
+                                  opacity: isDragging ? 0.25 : 1,
+                                  transition:'opacity .15s',
                                   userSelect:'none', WebkitUserSelect:'none',
                                   WebkitTouchCallout:'none' }}>
                                 <div className="habit-card-top">
@@ -269,6 +292,37 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                       })}
                     </SortableContext>
                   </div>
+                  <DragOverlay dropAnimation={null}>
+                    {activeHabit && (() => {
+                      const final    = Math.floor(DIFF_EXP[activeHabit.difficulty] * multi)
+                      const colorCls = CARD_COLORS[activeIdx % CARD_COLORS.length]
+                      const icon     = streakIcon(activeHabit.streak)
+                      return (
+                        <div className={`habit-card ${colorCls} ${activeHabit.done_today?'done-card':''}`}
+                          style={{ opacity:0.95, transform:'scale(1.02)',
+                            boxShadow:'0 20px 40px rgba(0,0,0,.3)', cursor:'grabbing',
+                            userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none' }}>
+                          <div className="habit-card-top">
+                            <div style={{ cursor:'grabbing', fontSize:16, opacity:0.6, lineHeight:1, marginRight:4 }}>⠿</div>
+                            <div className="habit-streak">⚡ {activeHabit.streak||0}{activeHabit.streak>0&&<span>{icon}</span>}</div>
+                            <div className="week-checks">
+                              {[0,1,2,3,4,5,6].map(d=>(
+                                <div key={d} className={`week-dot ${d===6&&activeHabit.done_today?'filled':''}`} />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="habit-card-bottom">
+                            <div>
+                              <div className="habit-title">{activeHabit.name}</div>
+                              <div className="habit-sub">
+                                +{final} EXP · <span className={`diff-pill dp-${activeHabit.difficulty}`}>{t(lang,`difficulties.${activeHabit.difficulty}`)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </DragOverlay>
                 </DndContext>
               )}
 
