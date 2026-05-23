@@ -26,6 +26,9 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
   const [checklistView, setChecklistView] = useState(() => localStorage.getItem('hq_checklist') === '1')
   const hNameRef = useRef(); const hCatRef = useRef()
   const gNameRef = useRef(); const gTypeRef = useRef(); const gTargetRef = useRef()
+  const [selFreq, setSelFreq] = useState('daily')
+  const [selDays, setSelDays] = useState([])
+  const [heatmapData, setHeatmapData] = useState({})
 
   // ── Drag & drop state ──────────────────────────
   const [orderedHabits, setOrderedHabits] = useState([])
@@ -34,6 +37,25 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor,   { activationConstraint: { distance: 8 } })
   )
+
+  // Load heatmap data when habits tab is active
+  useEffect(() => {
+    if (tab !== 'habits' || !userId) return
+    const loadHeatmap = async () => {
+      const from = new Date()
+      from.setDate(from.getDate() - 29)
+      const { data } = await supabase
+        .from('habit_logs')
+        .select('logged_date')
+        .eq('user_id', userId)
+        .gte('logged_date', from.toISOString().split('T')[0])
+      if (!data) return
+      const counts = {}
+      data.forEach(r => { counts[r.logged_date] = (counts[r.logged_date] || 0) + 1 })
+      setHeatmapData(counts)
+    }
+    loadHeatmap()
+  }, [tab, userId])
 
   // Sync orderedHabits from habits, preserving drag-set order
   useEffect(() => {
@@ -55,6 +77,22 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
   const cls         = getClass(profile?.level||1, lang)
   const activeHabit = activeId ? orderedHabits.find(h => h.id === activeId) : null
   const activeIdx   = activeHabit ? orderedHabits.indexOf(activeHabit) : -1
+
+  const todayDow = new Date().getDay()
+  const visibleHabits = orderedHabits.filter(h => {
+    const freq = h.frequency || 'daily'
+    if (freq === 'weekly') return (h.frequency_days || []).includes(todayDow)
+    if (freq === 'once') return !h.completed_once
+    return true
+  })
+  const getHeatLevel = count => {
+    if (!count) return 0
+    const ratio = count / Math.max(1, habits.length)
+    if (ratio >= 1) return 4
+    if (ratio >= 0.75) return 3
+    if (ratio >= 0.5) return 2
+    return 1
+  }
 
   const NAV = [
     { id:'habits',  icon:'⚔️', label: lang==='en'?'Habits':'Hábitos' },
@@ -178,12 +216,12 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                   measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
                   onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
                   <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:16, padding:'0 20px', boxShadow:'var(--shadow)' }}>
-                    <SortableContext items={orderedHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
-                      {orderedHabits.map((h, i) => (
+                    <SortableContext items={visibleHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
+                      {visibleHabits.map((h, i) => (
                         <SortableHabitCard key={h.id} id={h.id}>
                           {({ listeners, isDragging }) => (
                             <div style={{ display:'flex', alignItems:'center', gap:12, padding:'15px 0',
-                              borderBottom: i < orderedHabits.length-1 ? '1px solid var(--border)' : 'none',
+                              borderBottom: i < visibleHabits.length-1 ? '1px solid var(--border)' : 'none',
                               opacity: isDragging ? 0.25 : 1,
                               transition:'opacity .15s',
                               userSelect:'none', WebkitUserSelect:'none' }}>
@@ -193,11 +231,11 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                                   touchAction:'none', userSelect:'none', WebkitUserSelect:'none',
                                   WebkitTouchCallout:'none' }}>⠿</div>
                               <button
-                                onClick={e => { if (!h.done_today) completeHabit(h.id, e.clientX, e.clientY) }}
+                                onClick={e => completeHabit(h.id, e.clientX, e.clientY)}
                                 style={{ width:28, height:28, borderRadius:'50%', flexShrink:0,
                                   border: h.done_today ? 'none' : '2px solid var(--text3)',
                                   background: h.done_today ? 'var(--accent)' : 'transparent',
-                                  cursor: h.done_today ? 'default' : 'pointer',
+                                  cursor: 'pointer',
                                   display:'flex', alignItems:'center', justifyContent:'center',
                                   color:'var(--accent-fg)', fontSize:14, fontWeight:700,
                                   transition:'all .2s' }}>
@@ -237,8 +275,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                   measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
                   onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
                   <div>
-                    <SortableContext items={orderedHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
-                      {orderedHabits.map((h, i) => {
+                    <SortableContext items={visibleHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
+                      {visibleHabits.map((h, i) => {
                         const final    = Math.floor(DIFF_EXP[h.difficulty] * multi)
                         const colorCls = CARD_COLORS[i % CARD_COLORS.length]
                         const icon     = streakIcon(h.streak)
@@ -331,7 +369,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                   <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                     {Array.from({length:30},(_,i)=>{
                       const d=new Date(); d.setDate(d.getDate()-(29-i))
-                      return { key:d.toISOString().split('T')[0], lvl:0 }
+                      const key=d.toISOString().split('T')[0]
+                      return { key, lvl: getHeatLevel(heatmapData[key]||0) }
                     }).map(c=>(
                       <div key={c.key} className={`hm-cell hm-${c.lvl}`}
                         style={{ width:'calc((100% - 116px) / 30)', minWidth:8 }} title={c.key} />
@@ -508,11 +547,54 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
                 ))}
               </div>
             </div>
+            <div className="form-group">
+              <label className="form-label">{lang==='en'?'Frequency':'Frecuencia'}</label>
+              <div style={{ display:'flex', gap:8 }}>
+                {[
+                  { id:'daily',  label: lang==='en'?'Daily':'Diario' },
+                  { id:'weekly', label: lang==='en'?'Weekly':'Semanal' },
+                  { id:'once',   label: lang==='en'?'Once':'Una vez' },
+                ].map(f=>(
+                  <button key={f.id} type="button" onClick={()=>setSelFreq(f.id)}
+                    style={{ flex:1, padding:'9px 4px', borderRadius:8,
+                      border:`1.5px solid ${selFreq===f.id?'var(--accent)':'var(--border)'}`,
+                      background:'var(--bg3)',
+                      color: selFreq===f.id?'var(--text)':'var(--text2)',
+                      fontWeight:700, fontSize:13, cursor:'pointer', transition:'all .15s',
+                      fontFamily:'var(--font)' }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {selFreq==='weekly' && (
+              <div className="form-group">
+                <label className="form-label">{lang==='en'?'Days':'Días'}</label>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {(lang==='en'
+                    ? ['Su','Mo','Tu','We','Th','Fr','Sa']
+                    : ['D','L','M','X','J','V','S']
+                  ).map((day,i)=>(
+                    <button key={i} type="button"
+                      onClick={()=>setSelDays(prev=>prev.includes(i)?prev.filter(d=>d!==i):[...prev,i])}
+                      style={{ width:38, height:38, borderRadius:'50%',
+                        border:`1.5px solid ${selDays.includes(i)?'var(--accent)':'var(--border)'}`,
+                        background: selDays.includes(i)?'var(--accent)':'var(--bg3)',
+                        color: selDays.includes(i)?'var(--accent-fg)':'var(--text2)',
+                        fontWeight:700, fontSize:12, cursor:'pointer', transition:'all .15s',
+                        fontFamily:'var(--font)' }}>
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={()=>setHabit(false)}>{t(lang,'cancel')}</button>
+              <button className="btn btn-ghost" onClick={()=>{ setHabit(false); setSelFreq('daily'); setSelDays([]) }}>{t(lang,'cancel')}</button>
               <button className="btn btn-primary" onClick={()=>{
                 const n=hNameRef.current?.value?.trim(); if(!n)return
-                addHabit(n,hCatRef.current?.value||'other',selDiff); setHabit(false)
+                addHabit(n,hCatRef.current?.value||'other',selDiff,selFreq,selDays)
+                setHabit(false); setSelFreq('daily'); setSelDays([])
               }}>{lang==='en'?'Add habit':'Añadir hábito'}</button>
             </div>
           </div>

@@ -61,7 +61,13 @@ export default function PublicProfile() {
 
       {/* Profile card */}
       <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:16, padding:24, marginBottom:16, textAlign:'center' }}>
-        <div style={{ fontSize:64, marginBottom:12 }}>{profile.avatar_emoji || '🧙'}</div>
+        <div style={{ width:88, height:88, borderRadius:'50%', margin:'0 auto 12px',
+          border:`3px solid ${profile.avatar_color || '#4DABF7'}`,
+          boxShadow:`0 0 16px ${profile.avatar_color || '#4DABF7'}66`,
+          background:'var(--bg3)', display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:52 }}>
+          {profile.avatar_emoji || '🧙'}
+        </div>
         <div style={{ fontSize:24, fontWeight:800, marginBottom:4 }}>{profile.display_name}</div>
         <div style={{ fontSize:14, color:'var(--text2)', marginBottom:16 }}>
           {cls.displayName} · {cls.displayTitle}

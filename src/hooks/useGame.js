@@ -182,11 +182,13 @@ export function useGame(userId) {
   }
 
   // ── HABITS ───────────────────────────────────
-  async function addHabit(name, category, difficulty) {
+  async function addHabit(name, category, difficulty, frequency = 'daily', frequency_days = []) {
     const { data, error } = await supabase.from('habits').insert({
       user_id: userId, name, category, difficulty,
       streak: 0, best_streak: 0, done_today: false,
       order_idx: habits.length,
+      frequency,
+      frequency_days,
     }).select().single()
     if (!error && data) setHabits(h => [...h, data])
     await checkAchievements({ _habitCount: habits.length + 1 })
@@ -198,92 +200,120 @@ export function useGame(userId) {
 
     // ── DESMARCAR (undo) ──────────────────────────
     if (h.done_today) {
-      setHabits(hs => hs.map(x => x.id === habitId ? { ...x, done_today: false } : x))
-      await supabase.from('habits').update({ done_today: false }).eq('id', habitId)
-      // revert total_done and exp (best effort — restar lo ganado)
-      const prof = profileRef.current
-      const revertExp = DIFF_EXP[h.difficulty]
-      const newTotalDone = Math.max(0, (prof?.total_done || 1) - 1)
-      const newTotalExp  = Math.max(0, (prof?.total_exp  || 0) - revertExp)
-      const newExp       = Math.max(0, (prof?.exp        || 0) - revertExp)
-      await supabase.from('profiles').update({
-        total_done: newTotalDone,
-        total_exp:  newTotalExp,
-        exp:        newExp,
-      }).eq('id', userId)
-      // delete last log entry for this habit today
-      await supabase.from('habit_logs')
-        .delete()
+      // Check 2-minute grace window before reverting EXP
+      const { data: todayLog } = await supabase
+        .from('habit_logs')
+        .select('id, created_at')
         .eq('user_id', userId)
         .eq('habit_id', habitId)
         .eq('logged_date', todayStr())
-      const { data: freshProf } = await supabase.from('profiles').select('*').eq('id', userId).single()
-      if (freshProf) { setProfile(freshProf); profileRef.current = freshProf }
+        .maybeSingle()
+
+      setHabits(hs => hs.map(x => x.id === habitId ? { ...x, done_today: false } : x))
+      await supabase.from('habits').update({ done_today: false }).eq('id', habitId)
+
+      const withinGrace = todayLog &&
+        (Date.now() - new Date(todayLog.created_at).getTime()) < 120_000
+
+      if (withinGrace) {
+        const prof = profileRef.current
+        const revertExp = DIFF_EXP[h.difficulty]
+        const revertUpdates = {
+          total_done: Math.max(0, (prof?.total_done || 1) - 1),
+          total_exp:  Math.max(0, (prof?.total_exp  || 0) - revertExp),
+          exp:        Math.max(0, (prof?.exp        || 0) - revertExp),
+          mp:         Math.max(0, (prof?.mp         || 0) - 5),
+        }
+        ;(STAT_CATS[h.category] || []).forEach(k => {
+          revertUpdates[k] = Math.max(1, (prof?.[k] || 1) - 1)
+        })
+        await supabase.from('profiles').update(revertUpdates).eq('id', userId)
+        await supabase.from('habit_logs')
+          .delete()
+          .eq('user_id', userId)
+          .eq('habit_id', habitId)
+          .eq('logged_date', todayStr())
+        const { data: freshProf } = await supabase.from('profiles').select('*').eq('id', userId).single()
+        if (freshProf) { setProfile(freshProf); profileRef.current = freshProf }
+      }
       return
     }
 
     // ── MARCAR COMPLETADO ─────────────────────────
+    // Anti-farmeo: check if already logged today
+    const { data: existingLog } = await supabase
+      .from('habit_logs')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('habit_id', habitId)
+      .eq('logged_date', todayStr())
+      .maybeSingle()
+
+    const alreadyLogged = !!existingLog
+
     // optimistic update
-    setHabits(hs => hs.map(x => x.id === habitId ? { ...x, done_today: true } : x))
+    const habitUpdates = { done_today: true }
+    if (h.frequency === 'once') habitUpdates.completed_once = true
+    setHabits(hs => hs.map(x => x.id === habitId ? { ...x, ...habitUpdates } : x))
 
     const prof = profileRef.current
-    const newMp = Math.min((prof?.max_mp || 50), (prof?.mp || 0) + 5)
 
-    // stat updates from category
-    const statBumps = {}
-    ;(STAT_CATS[h.category] || []).forEach(k => {
-      statBumps[k] = (prof?.[k] || 1) + 1
-    })
+    const profileUpdates = { total_done: (prof?.total_done || 0) + (alreadyLogged ? 0 : 1) }
+    if (!alreadyLogged) {
+      profileUpdates.mp = Math.min((prof?.max_mp || 50), (prof?.mp || 0) + 5)
+      ;(STAT_CATS[h.category] || []).forEach(k => {
+        profileUpdates[k] = (prof?.[k] || 1) + 1
+      })
+    }
+    await supabase.from('profiles').update(profileUpdates).eq('id', userId)
+    await supabase.from('habits').update(habitUpdates).eq('id', habitId)
 
-    const newTotalDone = (prof?.total_done || 0) + 1
-    await supabase.from('profiles').update({ mp: newMp, total_done: newTotalDone, ...statBumps }).eq('id', userId)
-    await supabase.from('habits').update({ done_today: true }).eq('id', habitId)
-
-    const expGained = await gainExp(DIFF_EXP[h.difficulty], x, y)
     if (soundOn) playSound('complete')
 
-    // log it
-    await supabase.from('habit_logs').insert({
-      user_id: userId, habit_id: habitId,
-      habit_name: h.name, difficulty: h.difficulty,
-      exp_gained: expGained, logged_date: todayStr()
-    })
+    let expGained = 0
+    if (!alreadyLogged) {
+      expGained = await gainExp(DIFF_EXP[h.difficulty], x, y)
 
-    // feed
-    await supabase.from('activity_feed').insert({
-      user_id: userId,
-      event_type: 'habit_done',
-      event_data: { habit_name: h.name, difficulty: h.difficulty, exp: expGained, streak: h.streak }
-    })
+      await supabase.from('habit_logs').insert({
+        user_id: userId, habit_id: habitId,
+        habit_name: h.name, difficulty: h.difficulty,
+        exp_gained: expGained, logged_date: todayStr()
+      })
 
-    // tick goals
-    const updatedGoals = []
-    for (const g of goals) {
-      if (g.progress < g.target) {
-        const newProg = g.progress + 1
-        const completed = newProg >= g.target
-        await supabase.from('goals').update({ progress: newProg, completed }).eq('id', g.id)
-        updatedGoals.push({ ...g, progress: newProg, completed })
-        if (completed) {
-          const reward = g.type === 'weekly' ? 300 : 1000
-          await gainExp(reward, 600, 300)
-          await supabase.from('profiles').update({ goals_done: (prof?.goals_done || 0) + 1 }).eq('id', userId)
-          addToast(lang === 'en' ? '🎯 GOAL COMPLETED' : '🎯 OBJETIVO LOGRADO', g.name)
-          if (soundOn) playSound('goal')
+      await supabase.from('activity_feed').insert({
+        user_id: userId,
+        event_type: 'habit_done',
+        event_data: { habit_name: h.name, difficulty: h.difficulty, exp: expGained, streak: h.streak }
+      })
+
+      // tick goals
+      const updatedGoals = []
+      for (const g of goals) {
+        if (g.progress < g.target) {
+          const newProg = g.progress + 1
+          const completed = newProg >= g.target
+          await supabase.from('goals').update({ progress: newProg, completed }).eq('id', g.id)
+          updatedGoals.push({ ...g, progress: newProg, completed })
+          if (completed) {
+            const reward = g.type === 'weekly' ? 300 : 1000
+            await gainExp(reward, 600, 300)
+            await supabase.from('profiles').update({ goals_done: (prof?.goals_done || 0) + 1 }).eq('id', userId)
+            addToast(lang === 'en' ? '🎯 GOAL COMPLETED' : '🎯 OBJETIVO LOGRADO', g.name)
+            if (soundOn) playSound('goal')
+          }
+        } else {
+          updatedGoals.push(g)
         }
-      } else {
-        updatedGoals.push(g)
       }
+      setGoals(updatedGoals)
     }
-    setGoals(updatedGoals)
 
-    // reload profile for accurate stats
     const { data: freshProf } = await supabase.from('profiles').select('*').eq('id', userId).single()
     if (freshProf) { setProfile(freshProf); profileRef.current = freshProf }
 
-    await checkAchievements({
-      _legendaryDone: h.difficulty === 'legendary',
-    })
+    if (!alreadyLogged) {
+      await checkAchievements({ _legendaryDone: h.difficulty === 'legendary' })
+    }
   }
 
   async function deleteHabit(habitId) {

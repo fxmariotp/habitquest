@@ -9,19 +9,17 @@ export default function Sidebar({ profile, habits, lang }) {
   const hpPct  = Math.min(100, ((profile.hp||100) / (profile.max_hp||100)) * 100)
   const mpPct  = Math.min(100, ((profile.mp||0) / (profile.max_mp||50)) * 100)
 
-  let auraClass = ''
-  if (level >= 20)      auraClass = 'aura-purple'
-  else if (level >= 14) auraClass = 'aura-orange'
-  else if (level >= 10) auraClass = 'aura-blue'
-  else if (level >= 7)  auraClass = 'aura-green'
-  else if (level >= 3)  auraClass = 'aura-gold'
+  const avatarColor = profile.avatar_color || '#4DABF7'
 
   return (
     <div className="sidebar">
       {/* Avatar */}
       <div className="avatar-wrap">
-        {auraClass && <div className={`aura-ring aura-on ${auraClass}`} />}
-        <div className="avatar-circle">{profile.avatar_emoji || '🧙'}</div>
+        <div className="aura-ring aura-on"
+          style={{ border:`3px solid ${avatarColor}`, boxShadow:`0 0 14px ${avatarColor}, 0 0 28px ${avatarColor}44`, animation:'auraPulse 2.5s ease-in-out infinite' }} />
+        <div className="avatar-circle" style={{ borderColor: avatarColor }}>
+          {profile.avatar_emoji || '🧙'}
+        </div>
       </div>
 
       <div className="char-name">{profile.display_name || 'Hero'}</div>

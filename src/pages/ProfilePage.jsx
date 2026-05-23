@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AVATARS, ACHIEVEMENTS } from '../lib/game'
+import { ACHIEVEMENTS } from '../lib/game'
 import { t } from '../i18n/translations'
 
 export default function ProfilePage({ profile, achievements, updateProfile, lang, theme, setTheme, onLogout }) {
@@ -7,6 +7,27 @@ export default function ProfilePage({ profile, achievements, updateProfile, lang
   const [username, setUser]    = useState(profile?.username || '')
   const [saved,    setSaved]   = useState(false)
   const [copied,   setCopied]  = useState(false)
+  const [editingEmoji, setEditingEmoji] = useState(false)
+  const [emojiInput,   setEmojiInput]   = useState('')
+
+  const AVATAR_COLORS = [
+    '#FF6B6B','#FF8E53','#FFC107','#69DB7C','#40C057','#20C997',
+    '#4DABF7','#4C6EF5','#748FFC','#DA77F2','#F783AC','#FFFFFF',
+  ]
+
+  function handleEmojiChange(e) {
+    const val = e.target.value
+    if (!val) return setEmojiInput('')
+    let first = val
+    try { first = [...new Intl.Segmenter().segment(val)][0]?.segment || [...val][0] || val }
+    catch { first = [...val][0] || val }
+    setEmojiInput(first)
+    if (first.codePointAt(0) > 127) {
+      updateProfile({ avatar_emoji: first })
+      setEditingEmoji(false)
+      setEmojiInput('')
+    }
+  }
 
   async function save() {
     await updateProfile({
@@ -81,16 +102,59 @@ export default function ProfilePage({ profile, achievements, updateProfile, lang
 
       {/* Avatar picker */}
       <div style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:14, padding:18, marginBottom:12 }}>
-        <div style={{ fontFamily:'var(--mono)', fontSize:10, letterSpacing:2, color:'var(--text3)', marginBottom:14 }}>
-          {lang==='en'?'AVATAR':'AVATAR'}
+        <div style={{ fontFamily:'var(--mono)', fontSize:10, letterSpacing:2, color:'var(--text3)', marginBottom:16 }}>
+          AVATAR
         </div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-          {AVATARS.map(a=>(
-            <button key={a} onClick={()=>updateProfile({avatar_emoji:a})}
-              style={{ fontSize:26, width:44, height:44, borderRadius:10, border:`2px solid ${profile?.avatar_emoji===a?'var(--accent)':'var(--border)'}`, background:profile?.avatar_emoji===a?'rgba(212,255,0,.08)':'var(--bg3)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s' }}>
-              {a}
-            </button>
-          ))}
+
+        {/* Emoji selector */}
+        <div style={{ textAlign:'center', marginBottom:16 }}>
+          <button
+            onClick={() => { setEditingEmoji(true); setEmojiInput('') }}
+            style={{ width:80, height:80, fontSize:52, borderRadius:16,
+              border:`2.5px solid ${profile?.avatar_color || '#4DABF7'}`,
+              boxShadow:`0 0 12px ${profile?.avatar_color || '#4DABF7'}55`,
+              background:'var(--bg3)', cursor:'pointer',
+              display:'inline-flex', alignItems:'center', justifyContent:'center',
+              transition:'all .2s' }}>
+            {profile?.avatar_emoji || '🧙'}
+          </button>
+          <div style={{ fontSize:11, color:'var(--text3)', marginTop:8 }}>
+            {lang==='en' ? 'Tap to change · any emoji from your keyboard' : 'Pulsa para cambiar · cualquier emoji del teclado'}
+          </div>
+        </div>
+
+        {editingEmoji && (
+          <div className="form-group">
+            <input
+              autoFocus
+              className="form-input"
+              style={{ fontSize:22, textAlign:'center', letterSpacing:4 }}
+              placeholder={lang==='en' ? 'Type or paste an emoji…' : 'Escribe o pega un emoji…'}
+              value={emojiInput}
+              onChange={handleEmojiChange}
+              onBlur={() => { setEditingEmoji(false); setEmojiInput('') }}
+            />
+          </div>
+        )}
+
+        {/* Color palette */}
+        <div style={{ fontFamily:'var(--mono)', fontSize:10, letterSpacing:2, color:'var(--text3)', marginBottom:10, marginTop:4 }}>
+          {lang==='en' ? 'AVATAR COLOR' : 'COLOR DEL AVATAR'}
+        </div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+          {AVATAR_COLORS.map(c => {
+            const selected = (profile?.avatar_color || '#4DABF7') === c
+            return (
+              <button key={c} onClick={() => updateProfile({ avatar_color: c })}
+                style={{ width:36, height:36, borderRadius:'50%', background:c, cursor:'pointer',
+                  border: selected ? '3px solid var(--text)' : '3px solid transparent',
+                  outline: selected ? `2px solid ${c}` : 'none',
+                  outlineOffset:2,
+                  transform: selected ? 'scale(1.2)' : 'scale(1)',
+                  transition:'all .15s',
+                  boxShadow:`0 2px 8px ${c}66` }} />
+            )
+          })}
         </div>
       </div>
 

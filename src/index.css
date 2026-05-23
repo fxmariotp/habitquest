@@ -85,6 +85,8 @@ body {
   max-width: 960px;
   margin: 0 auto;
   padding: 0 16px 100px;  /* bottom padding for mobile nav */
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Desktop: sidebar + content */
@@ -104,7 +106,7 @@ body {
     display: none;  /* hidden on mobile, shown via bottom nav */
   }
   .app {
-    padding-bottom: 80px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
 }
 
@@ -222,11 +224,15 @@ body {
   bottom: 0; left: 0; right: 0;
   background: var(--panel);
   border-top: 1px solid var(--border);
-  z-index: 50;
+  z-index: 100;
   padding: 10px 0 max(12px, env(safe-area-inset-bottom));
   box-shadow: 0 -4px 20px rgba(0,0,0,.12);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  /* Force GPU layer to prevent scroll jank on iOS */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 @media (max-width: 700px) {
