@@ -74,7 +74,9 @@ body {
   color: var(--text);
   font-family: var(--font);
   font-size: 16px;
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   transition: background .3s, color .3s;
@@ -84,9 +86,11 @@ body {
 .app {
   max-width: 960px;
   margin: 0 auto;
-  padding: 0 16px 100px;  /* bottom padding for mobile nav */
-  min-height: 100vh;
+  padding: 0 16px;
+  height: 100vh;
+  overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Desktop: sidebar + content */
@@ -104,9 +108,6 @@ body {
   }
   .sidebar-wrap {
     display: none;  /* hidden on mobile, shown via bottom nav */
-  }
-  .app {
-    padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
 }
 
@@ -229,10 +230,6 @@ body {
   box-shadow: 0 -4px 20px rgba(0,0,0,.12);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  /* Force GPU layer to prevent scroll jank on iOS */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 @media (max-width: 700px) {

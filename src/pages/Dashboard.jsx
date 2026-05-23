@@ -166,7 +166,7 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
           <Sidebar profile={profile} habits={habits} lang={lang} />
         </div>
 
-        <main>
+        <main style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
           {/* Desktop tabs */}
           <div className="tabs">
             {ALL_TABS.map(item=>(
