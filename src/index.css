@@ -684,7 +684,8 @@ body {
   text-shadow: 0 0 10px currentColor;
 }
 [data-theme="light"] .exp-float { color: #0a0a0a; text-shadow: none; }
-@keyframes expUp { 0%{opacity:1;transform:translateY(0) scale(1)} 15%{opacity:1;transform:translateY(-8px) scale(1.2)} 100%{opacity:0;transform:translateY(-55px) scale(.8)} }
+@keyframes expUp   { 0%{opacity:1;transform:translateY(0) scale(1)} 15%{opacity:1;transform:translateY(-8px) scale(1.2)} 100%{opacity:0;transform:translateY(-55px) scale(.8)} }
+@keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
 
 /* ─── MISC ──────────────────────────────────── */
 .empty {
