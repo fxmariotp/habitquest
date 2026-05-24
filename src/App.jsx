@@ -5,6 +5,7 @@ import { useGame } from './hooks/useGame'
 import AuthPage from './pages/AuthPage'
 import Dashboard from './pages/Dashboard'
 import PublicProfile from './pages/PublicProfile'
+import PublicHabits  from './pages/PublicHabits'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -34,8 +35,9 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Perfil público — accesible sin login */}
-      <Route path="/u/:username" element={<PublicProfile />} />
+      {/* Rutas públicas — accesibles sin login */}
+      <Route path="/u/:username"        element={<PublicProfile />} />
+      <Route path="/u/:username/habits" element={<PublicHabits />} />
 
       {/* App principal */}
       <Route path="*" element={

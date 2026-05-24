@@ -51,6 +51,52 @@ export function useGame(userId) {
     loadAll()
   }, [userId])
 
+  // ── realtime sync across devices ──────────────
+  useEffect(() => {
+    if (!userId) return
+
+    const channel = supabase.channel('user-sync-' + userId)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'habits',
+        filter: `user_id=eq.${userId}`
+      }, ({ new: updated }) => {
+        setHabits(hs => hs.map(h => h.id === updated.id ? { ...h, ...updated } : h))
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${userId}`
+      }, ({ new: updated }) => {
+        setProfile(updated)
+        profileRef.current = updated
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'habits',
+        filter: `user_id=eq.${userId}`
+      }, ({ new: inserted }) => {
+        setHabits(hs => {
+          if (hs.some(h => h.id === inserted.id)) return hs
+          return [...hs, inserted].sort((a, b) => (a.order_idx ?? 0) - (b.order_idx ?? 0))
+        })
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'habits',
+        filter: `user_id=eq.${userId}`
+      }, ({ old: deleted }) => {
+        setHabits(hs => hs.filter(h => h.id !== deleted.id))
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [userId])
+
   async function loadAll() {
     setLoading(true)
     const [{ data: prof }, { data: hab }, { data: gol }, { data: ach }] = await Promise.all([

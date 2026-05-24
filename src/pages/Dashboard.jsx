@@ -6,7 +6,8 @@ import Sidebar from '../components/Sidebar'
 import SocialPage from './SocialPage'
 import ProfilePage from './ProfilePage'
 import RewardsPage from './RewardsPage'
-import DayHeader from '../components/DayHeader'
+import DayHeader  from '../components/DayHeader'
+import ShareModal from '../components/ShareModal'
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, MeasuringStrategy, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { SortableHabitCard } from '../components/SortableHabitCard'
@@ -24,6 +25,7 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
   const [editHabit,  setEditHabit] = useState(null)  // habit being edited
   const [selDiff, setSelDiff]  = useState('easy')
   const [checklistView, setChecklistView] = useState(() => localStorage.getItem('hq_checklist') === '1')
+  const [shareModal, setShareModal]       = useState(false)
   const hNameRef = useRef(); const hCatRef = useRef()
   const gNameRef = useRef(); const gTypeRef = useRef(); const gTargetRef = useRef()
   const [selFreq, setSelFreq] = useState('daily')
@@ -181,12 +183,20 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
             <div>
               <div className="sec-head">
                 <div className="sec-title">{lang==='en'?'Daily Missions':'Misiones diarias'}</div>
-                <button
-                  onClick={() => { const n = !checklistView; setChecklistView(n); localStorage.setItem('hq_checklist', n?'1':'0') }}
-                  title={checklistView ? (lang==='en'?'Card view':'Vista tarjetas') : (lang==='en'?'Checklist':'Checklist')}
-                  style={{ background:'none', border:'1px solid var(--border)', borderRadius:8, padding:'5px 10px', cursor:'pointer', fontSize:16, color:'var(--text2)', lineHeight:1 }}>
-                  {checklistView ? '⊞' : '☰'}
-                </button>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button
+                    onClick={() => setShareModal(true)}
+                    title={lang==='en'?'Share habits':'Compartir hábitos'}
+                    style={{ background:'none', border:'1px solid var(--border)', borderRadius:8, padding:'5px 10px', cursor:'pointer', fontSize:13, fontWeight:600, color:'var(--text2)', lineHeight:1 }}>
+                    ↗ {lang==='en'?'Share':'Compartir'}
+                  </button>
+                  <button
+                    onClick={() => { const n = !checklistView; setChecklistView(n); localStorage.setItem('hq_checklist', n?'1':'0') }}
+                    title={checklistView ? (lang==='en'?'Card view':'Vista tarjetas') : (lang==='en'?'Checklist':'Checklist')}
+                    style={{ background:'none', border:'1px solid var(--border)', borderRadius:8, padding:'5px 10px', cursor:'pointer', fontSize:16, color:'var(--text2)', lineHeight:1 }}>
+                    {checklistView ? '⊞' : '☰'}
+                  </button>
+                </div>
               </div>
 
               <DayHeader lang={lang} />
@@ -669,6 +679,17 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── MODAL: Compartir hábitos ── */}
+      {shareModal && (
+        <ShareModal
+          profile={profile}
+          habits={habits}
+          theme={theme}
+          lang={lang}
+          onClose={() => setShareModal(false)}
+        />
       )}
 
       {/* Toasts */}
