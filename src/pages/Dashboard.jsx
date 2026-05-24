@@ -6,8 +6,9 @@ import Sidebar from '../components/Sidebar'
 import SocialPage from './SocialPage'
 import ProfilePage from './ProfilePage'
 import RewardsPage from './RewardsPage'
-import DayHeader  from '../components/DayHeader'
-import ShareModal from '../components/ShareModal'
+import DayHeader   from '../components/DayHeader'
+import ShareModal  from '../components/ShareModal'
+import InstallPWA  from '../components/InstallPWA'
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, MeasuringStrategy, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { SortableHabitCard } from '../components/SortableHabitCard'
@@ -691,6 +692,8 @@ export default function Dashboard({ game, userId, onLogout, theme, setTheme }) {
           onClose={() => setShareModal(false)}
         />
       )}
+
+      <InstallPWA lang={lang} />
 
       {/* Toasts */}
       <div className="toast-wrap">
